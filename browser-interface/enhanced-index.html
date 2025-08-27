@@ -379,6 +379,40 @@
                 </button>
             </div>
 
+            <div class="input-group" id="aiControls" style="display: none;">
+                <label>🤖 AI 브라우저 제어</label>
+                
+                <div class="status-indicator" id="aiStatus">
+                    <div class="status-dot"></div>
+                    <span>AI 서버 상태: 확인 중...</span>
+                </div>
+
+                <div style="margin-bottom: 1rem;">
+                    <textarea id="aiTaskInput" 
+                              placeholder="자연어로 명령하세요. 예: 'Google에서 Playwright 검색하기'" 
+                              style="width: 100%; height: 80px; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px; font-size: 1rem; resize: vertical;"
+                              onkeydown="if(event.key==='Enter' && event.ctrlKey) executeAITask()"></textarea>
+                    <small style="color: #6c757d;">💡 Ctrl+Enter로 실행</small>
+                </div>
+                
+                <button class="btn" onclick="executeAITask()" style="margin-bottom: 0.5rem;">
+                    🚀 AI 태스크 실행
+                </button>
+                
+                <button class="btn btn-secondary" onclick="connectAI()" style="margin-bottom: 0.5rem;">
+                    🔗 AI 서버 연결
+                </button>
+                
+                <button class="btn btn-warning" onclick="showAIExamples()" style="margin-bottom: 0.5rem;">
+                    💡 예시 보기
+                </button>
+
+                <div id="aiExamples" style="display: none; background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+                    <h4>태스크 예시</h4>
+                    <div id="examplesList"></div>
+                </div>
+            </div>
+
             <div class="input-group">
                 <label>실행 로그</label>
                 <div class="logs" id="logs"></div>
@@ -438,6 +472,7 @@
         function updateConnectionInfo(vncPort, playwrightPort) {
             const connectionInfo = document.getElementById('connectionInfo');
             const browserControls = document.getElementById('browserControls');
+            const aiControls = document.getElementById('aiControls');
             const vncUrl = document.getElementById('vncUrl');
             const playwrightUrl = document.getElementById('playwrightUrl');
             
@@ -446,9 +481,14 @@
                 playwrightUrl.textContent = `ws://localhost:${playwrightPort}`;
                 connectionInfo.style.display = 'block';
                 browserControls.style.display = 'block';
+                aiControls.style.display = 'block';
+                
+                // AI 서버 상태 확인
+                checkAIServerStatus();
             } else {
                 connectionInfo.style.display = 'none';
                 browserControls.style.display = 'none';
+                aiControls.style.display = 'none';
             }
         }
 
@@ -817,6 +857,133 @@
                 setTimeout(() => URL.revokeObjectURL(url), 100);
             } catch (error) {
                 addLog(`스크린샷 실패: ${error.message}`, 'error');
+            }
+        }
+
+        // AI 제어 함수들
+        async function checkAIServerStatus() {
+            try {
+                const result = await makeApiCall('/browser-use/health');
+                const aiStatus = document.getElementById('aiStatus');
+                const statusText = aiStatus.querySelector('span');
+                
+                if (result.browser_use_available) {
+                    aiStatus.className = 'status-indicator connected';
+                    statusText.textContent = 'AI 서버: 연결됨';
+                    addLog('Browser-Use AI 서버가 준비되었습니다.', 'success');
+                } else {
+                    aiStatus.className = 'status-indicator warning';
+                    statusText.textContent = 'AI 서버: 패키지 미설치';
+                    addLog('browser-use 패키지가 설치되지 않았습니다.', 'warning');
+                }
+            } catch (error) {
+                const aiStatus = document.getElementById('aiStatus');
+                const statusText = aiStatus.querySelector('span');
+                aiStatus.className = 'status-indicator error';
+                statusText.textContent = 'AI 서버: 연결 실패';
+                addLog('Browser-Use AI 서버에 연결할 수 없습니다.', 'error');
+            }
+        }
+
+        async function connectAI() {
+            addLog('AI 서버에 브라우저 연결 중...', 'info');
+            
+            try {
+                const result = await makeApiCall('/browser-use/connect', 'POST');
+                if (result.success) {
+                    addLog('AI 서버가 브라우저에 연결되었습니다!', 'success');
+                } else {
+                    addLog(`AI 서버 연결 실패: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                addLog(`AI 서버 연결 실패: ${error.message}`, 'error');
+            }
+        }
+
+        async function executeAITask() {
+            const taskInput = document.getElementById('aiTaskInput');
+            const task = taskInput.value.trim();
+            
+            if (!task) {
+                addLog('태스크를 입력해주세요.', 'warning');
+                return;
+            }
+            
+            addLog(`AI 태스크 실행 중: "${task}"`, 'info');
+            
+            try {
+                const result = await makeApiCall('/browser-use/execute', 'POST', { task });
+                
+                if (result.success) {
+                    addLog('✅ AI 태스크 완료!', 'success');
+                    addLog(`결과: ${result.result}`, 'info');
+                    if (result.current_url) {
+                        addLog(`현재 페이지: ${result.current_url}`, 'info');
+                    }
+                    
+                    // 태스크 완료 후 입력창 비우기
+                    taskInput.value = '';
+                } else {
+                    addLog(`❌ AI 태스크 실패: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                addLog(`AI 태스크 실행 실패: ${error.message}`, 'error');
+            }
+        }
+
+        async function showAIExamples() {
+            const examplesDiv = document.getElementById('aiExamples');
+            const examplesList = document.getElementById('examplesList');
+            
+            if (examplesDiv.style.display === 'block') {
+                examplesDiv.style.display = 'none';
+                return;
+            }
+            
+            try {
+                const result = await makeApiCall('/browser-use/examples');
+                
+                if (result.success && result.examples) {
+                    examplesList.innerHTML = '';
+                    
+                    result.examples.forEach(example => {
+                        const exampleItem = document.createElement('div');
+                        exampleItem.style.marginBottom = '1rem';
+                        exampleItem.style.padding = '0.75rem';
+                        exampleItem.style.border = '1px solid #dee2e6';
+                        exampleItem.style.borderRadius = '6px';
+                        exampleItem.style.cursor = 'pointer';
+                        exampleItem.style.transition = 'background-color 0.2s';
+                        
+                        exampleItem.innerHTML = `
+                            <strong>${example.title}</strong><br/>
+                            <code style="color: #495057;">${example.task}</code><br/>
+                            <small style="color: #6c757d;">${example.description}</small>
+                        `;
+                        
+                        exampleItem.addEventListener('mouseover', () => {
+                            exampleItem.style.backgroundColor = '#f8f9fa';
+                        });
+                        
+                        exampleItem.addEventListener('mouseout', () => {
+                            exampleItem.style.backgroundColor = '';
+                        });
+                        
+                        exampleItem.addEventListener('click', () => {
+                            document.getElementById('aiTaskInput').value = example.task;
+                            addLog(`예시 태스크 선택: ${example.task}`, 'info');
+                        });
+                        
+                        examplesList.appendChild(exampleItem);
+                    });
+                    
+                    examplesDiv.style.display = 'block';
+                    addLog('태스크 예시를 클릭하여 입력창에 추가할 수 있습니다.', 'info');
+                } else {
+                    addLog('예시 목록을 불러올 수 없습니다.', 'error');
+                }
+            } catch (error) {
+                addLog(`예시 목록 조회 실패: ${error.message}`, 'error');
             }
         }
 

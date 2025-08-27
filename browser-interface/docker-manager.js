@@ -8,6 +8,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -396,6 +397,99 @@ app.get('/api/browser/screenshot', async (req, res) => {
             success: false, 
             message: '스크린샷 실패', 
             error: error.message 
+        });
+    }
+});
+
+/**
+ * Browser-Use 서버 상태 확인 API
+ */
+app.get('/api/browser-use/health', async (req, res) => {
+    try {
+        const response = await axios.get('http://127.0.0.1:5001/health');
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Browser-Use 서버에 연결할 수 없습니다',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Browser-Use 브라우저 연결 API
+ */
+app.post('/api/browser-use/connect', async (req, res) => {
+    try {
+        const response = await axios.post('http://127.0.0.1:5001/connect', {
+            ws_url: 'ws://localhost:37367/default'
+        });
+        
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Browser-Use 연결 실패',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Browser-Use 자연어 태스크 실행 API
+ */
+app.post('/api/browser-use/execute', async (req, res) => {
+    try {
+        const { task } = req.body;
+        
+        if (!task) {
+            return res.status(400).json({
+                success: false,
+                message: '태스크가 제공되지 않았습니다'
+            });
+        }
+        
+        const response = await axios.post('http://127.0.0.1:5001/execute', { task });
+        
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: '태스크 실행 실패',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Browser-Use 태스크 예시 API
+ */
+app.get('/api/browser-use/examples', async (req, res) => {
+    try {
+        const response = await axios.get('http://127.0.0.1:5001/tasks/examples');
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: '예시 목록 조회 실패',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Browser-Use 페이지 정보 API
+ */
+app.get('/api/browser-use/page-info', async (req, res) => {
+    try {
+        const response = await axios.get('http://127.0.0.1:5001/page_info');
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: '페이지 정보 조회 실패',
+            error: error.message
         });
     }
 });
