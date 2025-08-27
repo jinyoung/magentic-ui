@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magentic UI Browser Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            text-align: center;
+            color: white;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            padding: 2rem;
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .control-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            width: 350px;
+            height: fit-content;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .control-panel h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            font-size: 1.5em;
+            text-align: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border-radius: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #6c757d;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6c757d;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            border-left-color: #28a745;
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-indicator.connected .status-dot {
+            background: #28a745;
+        }
+
+        .status-indicator.error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-indicator.error .status-dot {
+            background: #dc3545;
+        }
+
+        .status-indicator.warning {
+            border-left-color: #ffc107;
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-indicator.warning .status-dot {
+            background: #ffc107;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .input-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            color: #212529;
+        }
+
+        .browser-container {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .browser-header {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .browser-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .browser-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+        }
+
+        .browser-btn.close { background: #ff5f56; }
+        .browser-btn.minimize { background: #ffbd2e; }
+        .browser-btn.maximize { background: #27ca3f; }
+
+        .browser-title {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .vnc-container {
+            width: 100%;
+            height: 600px;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .loading-message {
+            text-align: center;
+            color: #6c757d;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .logs {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            border: 1px solid #dee2e6;
+        }
+
+        .log-entry {
+            margin-bottom: 0.25rem;
+            padding: 0.25rem;
+            border-radius: 4px;
+        }
+
+        .log-entry.info { background: #d1ecf1; color: #0c5460; }
+        .log-entry.success { background: #d4edda; color: #155724; }
+        .log-entry.error { background: #f8d7da; color: #721c24; }
+        .log-entry.warning { background: #fff3cd; color: #856404; }
+
+        .connection-info {
+            background: #e7f3ff;
+            border: 1px solid #b3d7ff;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .connection-info h4 {
+            margin-bottom: 0.5rem;
+            color: #0066cc;
+        }
+
+        .connection-info p {
+            margin-bottom: 0.25rem;
+            color: #333;
+        }
+
+        @media (max-width: 1024px) {
+            .main-container {
+                flex-direction: column;
+                padding: 1rem;
+            }
+            
+            .control-panel {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>🚀 Magentic UI Browser</h1>
+        <p>가상 브라우저 환경에 접속하여 웹 애플리케이션을 테스트하고 개발하세요</p>
+    </header>
+
+    <div class="main-container">
+        <div class="control-panel">
+            <h2>컨테이너 제어</h2>
+            
+            <div class="status-indicator" id="containerStatus">
+                <div class="status-dot"></div>
+                <span>컨테이너 상태: 확인 중...</span>
+            </div>
+
+            <div class="input-group">
+                <label for="containerName">컨테이너 이름</label>
+                <input type="text" id="containerName" value="magentic-ui-browser" placeholder="컨테이너 이름을 입력하세요">
+            </div>
+
+            <div class="input-group">
+                <label for="vncPort">noVNC 포트</label>
+                <input type="number" id="vncPort" value="6080" placeholder="6080">
+            </div>
+
+            <div class="input-group">
+                <label for="playwrightPort">Playwright 포트</label>
+                <input type="number" id="playwrightPort" value="37367" placeholder="37367">
+            </div>
+
+            <button class="btn btn-warning" id="buildBtn" onclick="buildImage()">
+                🔨 Docker 이미지 빌드
+            </button>
+
+            <button class="btn" id="startBtn" onclick="startContainer()">
+                🚀 컨테이너 시작
+            </button>
+
+            <button class="btn btn-secondary" id="stopBtn" onclick="stopContainer()" disabled>
+                ⏹️ 컨테이너 중지
+            </button>
+
+            <button class="btn btn-danger" id="restartBtn" onclick="restartContainer()" disabled>
+                🔄 컨테이너 재시작
+            </button>
+
+            <div class="connection-info" id="connectionInfo" style="display: none;">
+                <h4>연결 정보</h4>
+                <p><strong>noVNC:</strong> <span id="vncUrl">-</span></p>
+                <p><strong>Playwright:</strong> <span id="playwrightUrl">-</span></p>
+            </div>
+
+            <div class="input-group" id="browserControls" style="display: none;">
+                <label>브라우저 제어</label>
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                    <input type="url" id="urlInput" placeholder="https://www.google.com" style="flex: 1;">
+                    <button class="btn" style="width: auto; margin: 0; padding: 0.75rem 1rem;" onclick="navigateTo()">이동</button>
+                </div>
+                <button class="btn" onclick="startBrowser()" style="margin-bottom: 0.5rem;">
+                    🌐 브라우저 시작
+                </button>
+                <button class="btn btn-secondary" onclick="takeScreenshot()" style="margin-bottom: 0.5rem;">
+                    📸 스크린샷
+                </button>
+            </div>
+
+            <div class="input-group">
+                <label>실행 로그</label>
+                <div class="logs" id="logs"></div>
+            </div>
+        </div>
+
+        <div class="browser-container">
+            <div class="browser-header">
+                <div class="browser-buttons">
+                    <button class="browser-btn close"></button>
+                    <button class="browser-btn minimize"></button>
+                    <button class="browser-btn maximize"></button>
+                </div>
+                <div class="browser-title">Magentic UI Browser - noVNC</div>
+            </div>
+            
+            <div class="vnc-container" id="vncContainer">
+                <div class="loading-message">
+                    <div class="loading-spinner"></div>
+                    <h3>가상 브라우저 준비 중...</h3>
+                    <p>Docker 이미지를 빌드하고 컨테이너를 시작하세요.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let containerRunning = false;
+        let vncConnected = false;
+        let checkInterval = null;
+        const API_BASE = '';
+
+        function addLog(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logs.appendChild(logEntry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        function updateStatus(status, message) {
+            const statusIndicator = document.getElementById('containerStatus');
+            const statusText = statusIndicator.querySelector('span');
+            
+            statusIndicator.className = `status-indicator ${status}`;
+            statusText.textContent = message;
+        }
+
+        function updateButtons(running) {
+            document.getElementById('startBtn').disabled = running;
+            document.getElementById('stopBtn').disabled = !running;
+            document.getElementById('restartBtn').disabled = !running;
+        }
+
+        function updateConnectionInfo(vncPort, playwrightPort) {
+            const connectionInfo = document.getElementById('connectionInfo');
+            const browserControls = document.getElementById('browserControls');
+            const vncUrl = document.getElementById('vncUrl');
+            const playwrightUrl = document.getElementById('playwrightUrl');
+            
+            if (vncPort && playwrightPort) {
+                vncUrl.textContent = `http://localhost:${vncPort}`;
+                playwrightUrl.textContent = `ws://localhost:${playwrightPort}`;
+                connectionInfo.style.display = 'block';
+                browserControls.style.display = 'block';
+            } else {
+                connectionInfo.style.display = 'none';
+                browserControls.style.display = 'none';
+            }
+        }
+
+        async function makeApiCall(endpoint, method = 'GET', data = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                };
+                
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+                
+                const response = await fetch(`${API_BASE}/api${endpoint}`, options);
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || result.message);
+                }
+                
+                return result;
+            } catch (error) {
+                console.error('API 호출 실패:', error);
+                throw error;
+            }
+        }
+
+        async function buildImage() {
+            addLog('Docker 이미지 빌드 시작...', 'info');
+            updateStatus('warning', 'Docker 이미지 빌드 중...');
+            
+            try {
+                document.getElementById('buildBtn').disabled = true;
+                
+                const result = await makeApiCall('/build', 'POST');
+                
+                addLog('Docker 이미지 빌드 완료!', 'success');
+                updateStatus('connected', 'Docker 이미지 빌드 완료');
+                
+            } catch (error) {
+                addLog(`Docker 이미지 빌드 실패: ${error.message}`, 'error');
+                updateStatus('error', 'Docker 이미지 빌드 실패');
+            } finally {
+                document.getElementById('buildBtn').disabled = false;
+            }
+        }
+
+        async function startContainer() {
+            const containerName = document.getElementById('containerName').value;
+            const vncPort = document.getElementById('vncPort').value;
+            const playwrightPort = document.getElementById('playwrightPort').value;
+
+            addLog('컨테이너 시작 중...', 'info');
+            updateStatus('warning', '컨테이너 시작 중...');
+            
+            try {
+                document.getElementById('startBtn').disabled = true;
+                
+                const result = await makeApiCall('/start', 'POST', {
+                    containerName,
+                    vncPort: parseInt(vncPort),
+                    playwrightPort: parseInt(playwrightPort)
+                });
+                
+                containerRunning = true;
+                updateStatus('connected', '컨테이너 실행 중');
+                updateButtons(true);
+                updateConnectionInfo(vncPort, playwrightPort);
+                addLog('컨테이너가 성공적으로 시작되었습니다.', 'success');
+                
+                // noVNC 연결
+                setTimeout(() => {
+                    connectToVNC(vncPort);
+                }, 3000); // 3초 후 연결 시도
+                
+                // 상태 모니터링 시작
+                startMonitoring();
+                
+            } catch (error) {
+                addLog(`컨테이너 시작 실패: ${error.message}`, 'error');
+                updateStatus('error', '컨테이너 시작 실패');
+                document.getElementById('startBtn').disabled = false;
+            }
+        }
+
+        async function stopContainer() {
+            const containerName = document.getElementById('containerName').value;
+            
+            addLog('컨테이너 중지 중...', 'info');
+            updateStatus('warning', '컨테이너 중지 중...');
+            
+            try {
+                await makeApiCall('/stop', 'POST', { containerName });
+                
+                containerRunning = false;
+                vncConnected = false;
+                updateStatus('', '컨테이너 중지됨');
+                updateButtons(false);
+                updateConnectionInfo(null, null);
+                addLog('컨테이너가 성공적으로 중지되었습니다.', 'success');
+                
+                // VNC 연결 해제
+                disconnectVNC();
+                
+                // 모니터링 중지
+                stopMonitoring();
+                
+            } catch (error) {
+                addLog(`컨테이너 중지 실패: ${error.message}`, 'error');
+                updateStatus('error', '컨테이너 중지 실패');
+            }
+        }
+
+        async function restartContainer() {
+            const containerName = document.getElementById('containerName').value;
+            const vncPort = document.getElementById('vncPort').value;
+            const playwrightPort = document.getElementById('playwrightPort').value;
+            
+            addLog('컨테이너 재시작 중...', 'warning');
+            updateStatus('warning', '컨테이너 재시작 중...');
+            
+            try {
+                const result = await makeApiCall('/restart', 'POST', {
+                    containerName,
+                    vncPort: parseInt(vncPort),
+                    playwrightPort: parseInt(playwrightPort)
+                });
+                
+                containerRunning = true;
+                updateStatus('connected', '컨테이너 실행 중');
+                updateButtons(true);
+                updateConnectionInfo(vncPort, playwrightPort);
+                addLog('컨테이너가 성공적으로 재시작되었습니다.', 'success');
+                
+                // noVNC 연결
+                setTimeout(() => {
+                    connectToVNC(vncPort);
+                }, 3000);
+                
+                // 상태 모니터링 시작
+                startMonitoring();
+                
+            } catch (error) {
+                addLog(`컨테이너 재시작 실패: ${error.message}`, 'error');
+                updateStatus('error', '컨테이너 재시작 실패');
+            }
+        }
+
+        async function checkContainerStatus() {
+            try {
+                const containerName = document.getElementById('containerName').value;
+                const result = await makeApiCall(`/status/${containerName}`);
+                
+                const container = result.container;
+                
+                if (container.status === 'running') {
+                    containerRunning = true;
+                    updateStatus('connected', '컨테이너 실행 중');
+                    updateButtons(true);
+                    updateConnectionInfo(container.ports.vnc, container.ports.playwright);
+                } else {
+                    containerRunning = false;
+                    updateStatus('', '컨테이너 중지됨');
+                    updateButtons(false);
+                    updateConnectionInfo(null, null);
+                }
+                
+            } catch (error) {
+                updateStatus('error', '상태 확인 실패');
+                containerRunning = false;
+                updateButtons(false);
+                updateConnectionInfo(null, null);
+            }
+        }
+
+        function connectToVNC(port) {
+            const vncContainer = document.getElementById('vncContainer');
+            
+            // 로딩 메시지 제거
+            vncContainer.innerHTML = '';
+            
+            // 프록시된 URL을 사용하여 iframe 생성
+            const iframe = document.createElement('iframe');
+            iframe.src = `/vnc/vnc.html?autoconnect=true&resize=remote`;
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.border = 'none';
+            
+            iframe.onload = () => {
+                vncConnected = true;
+                addLog('noVNC에 성공적으로 연결되었습니다.', 'success');
+            };
+            
+            iframe.onerror = () => {
+                addLog('noVNC 연결에 실패했습니다. 대체 연결 방법을 제공합니다.', 'warning');
+                showAlternativeConnection(port);
+            };
+            
+            // iframe이 로드되지 않는 경우를 대비한 타임아웃
+            setTimeout(() => {
+                if (!vncConnected) {
+                    addLog('iframe 로딩이 지연되고 있습니다. 직접 링크를 사용하세요.', 'warning');
+                    showAlternativeConnection(port);
+                }
+            }, 10000);
+            
+            vncContainer.appendChild(iframe);
+        }
+
+        function showAlternativeConnection(port) {
+            const vncContainer = document.getElementById('vncContainer');
+            vncContainer.innerHTML = '';
+            
+            const connectionDiv = document.createElement('div');
+            connectionDiv.className = 'vnc-connection';
+            connectionDiv.style.textAlign = 'center';
+            connectionDiv.style.padding = '2rem';
+            connectionDiv.style.color = '#333';
+            
+            connectionDiv.innerHTML = `
+                <h3>🖥️ 가상 브라우저 연결</h3>
+                <p style="margin: 1rem 0;">프록시 연결이 실패했습니다. 아래 옵션을 사용하세요.</p>
+                <div style="margin: 2rem 0;">
+                    <a href="/vnc/vnc.html?autoconnect=true&resize=remote" 
+                       target="_blank" 
+                       class="btn" 
+                       style="display: inline-block; text-decoration: none; margin: 0.5rem;">
+                        🚀 프록시 연결로 열기
+                    </a>
+                    <br/>
+                    <a href="http://localhost:${port}/vnc.html?autoconnect=true&resize=remote" 
+                       target="_blank" 
+                       class="btn btn-secondary" 
+                       style="display: inline-block; text-decoration: none; margin: 0.5rem;">
+                        🔗 직접 연결로 열기
+                    </a>
+                </div>
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin: 1rem 0; font-size: 0.9rem;">
+                    <strong>연결 정보:</strong><br/>
+                    프록시 URL: <code>/vnc/</code><br/>
+                    직접 URL: <code>http://localhost:${port}</code><br/>
+                    상태: <span style="color: #28a745;">✅ 연결 가능</span>
+                </div>
+                <p style="font-size: 0.9rem; color: #6c757d;">
+                    💡 프록시 연결을 우선 시도해보세요. 실패 시 직접 연결을 사용하세요.
+                </p>
+            `;
+            
+            vncContainer.appendChild(connectionDiv);
+        }
+
+        function disconnectVNC() {
+            const vncContainer = document.getElementById('vncContainer');
+            vncContainer.innerHTML = `
+                <div class="loading-message">
+                    <h3>연결이 종료되었습니다</h3>
+                    <p>컨테이너를 시작하면 여기에 브라우저가 표시됩니다.</p>
+                </div>
+            `;
+        }
+
+        function showConnectionError() {
+            const vncContainer = document.getElementById('vncContainer');
+            vncContainer.innerHTML = `
+                <div class="loading-message">
+                    <h3>연결 오류</h3>
+                    <p>noVNC에 연결할 수 없습니다. 컨테이너가 실행 중인지 확인하세요.</p>
+                    <button class="btn" onclick="location.reload()">페이지 새로고침</button>
+                </div>
+            `;
+        }
+
+        function startMonitoring() {
+            checkInterval = setInterval(() => {
+                checkContainerStatus();
+            }, 10000); // 10초마다 체크
+        }
+
+        function stopMonitoring() {
+            if (checkInterval) {
+                clearInterval(checkInterval);
+                checkInterval = null;
+            }
+        }
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', async () => {
+            addLog('Magentic UI Browser Interface가 로드되었습니다.', 'success');
+            
+            // 초기 상태 확인
+            await checkContainerStatus();
+            
+            // Docker 이미지 존재 확인
+            try {
+                const result = await makeApiCall('/image/check');
+                if (!result.exists) {
+                    addLog('Docker 이미지가 없습니다. 먼저 이미지를 빌드하세요.', 'warning');
+                    updateStatus('warning', 'Docker 이미지 빌드 필요');
+                } else {
+                    addLog('Docker 이미지가 준비되었습니다.', 'success');
+                }
+            } catch (error) {
+                addLog('Docker 이미지 상태를 확인할 수 없습니다.', 'warning');
+            }
+        });
+
+        // 브라우저 제어 함수들
+        async function startBrowser() {
+            const url = document.getElementById('urlInput').value || 'https://www.google.com';
+            
+            addLog('브라우저 시작 중...', 'info');
+            
+            try {
+                const result = await makeApiCall('/browser/start', 'POST', { url });
+                addLog('브라우저가 성공적으로 시작되었습니다!', 'success');
+                addLog(`현재 페이지: ${url}`, 'info');
+            } catch (error) {
+                addLog(`브라우저 시작 실패: ${error.message}`, 'error');
+            }
+        }
+
+        async function navigateTo() {
+            const url = document.getElementById('urlInput').value;
+            
+            if (!url) {
+                addLog('URL을 입력해주세요.', 'warning');
+                return;
+            }
+            
+            addLog(`페이지 이동 중: ${url}`, 'info');
+            
+            try {
+                const result = await makeApiCall('/browser/navigate', 'POST', { url });
+                addLog('페이지 이동 완료!', 'success');
+            } catch (error) {
+                addLog(`페이지 이동 실패: ${error.message}`, 'error');
+            }
+        }
+
+        async function takeScreenshot() {
+            addLog('스크린샷 촬영 중...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/browser/screenshot`);
+                
+                if (!response.ok) {
+                    throw new Error('스크린샷 요청 실패');
+                }
+                
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                
+                // 스크린샷을 새 탭에서 열기
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `screenshot-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.png`;
+                link.target = '_blank';
+                link.click();
+                
+                addLog('스크린샷이 촬영되었습니다!', 'success');
+                
+                // 메모리 정리
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+            } catch (error) {
+                addLog(`스크린샷 실패: ${error.message}`, 'error');
+            }
+        }
+
+        // 페이지 언로드 시 정리
+        window.addEventListener('beforeunload', () => {
+            stopMonitoring();
+        });
+    </script>
+</body>
+</html>

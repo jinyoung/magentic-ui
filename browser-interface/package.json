@@ -1,0 +1,33 @@
+{
+  "name": "magentic-ui-browser-interface",
+  "version": "1.0.0",
+  "description": "Web interface for managing Magentic UI Browser Docker containers",
+  "main": "docker-manager.js",
+  "scripts": {
+    "start": "node docker-manager.js",
+    "dev": "nodemon docker-manager.js",
+    "build-image": "cd ../docker/magentic-ui-browser-docker && docker build -t magentic-ui-browser:latest .",
+    "setup": "npm install && npm run build-image"
+  },
+  "keywords": [
+    "docker",
+    "browser",
+    "magentic-ui",
+    "vnc",
+    "playwright"
+  ],
+  "author": "Magentic UI Team",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.9",
+    "playwright": "^1.51.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
