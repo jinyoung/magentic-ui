@@ -52,3 +52,4 @@ echo ""
 echo "🔧 Docker 컨테이너 시작:"
 echo "   npm start  # main browser-interface 서버"
 echo "   # 웹 인터페이스에서 Docker 컨테이너 빌드 및 시작"
+

@@ -912,3 +912,4 @@ if __name__ == '__main__':
     
     # macOS AirPlay 충돌 방지를 위해 포트 5002 사용
     app.run(host='0.0.0.0', port=5002, debug=True)
+

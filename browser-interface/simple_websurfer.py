@@ -295,3 +295,4 @@ if __name__ == '__main__':
     print("⚡ Playwright 지원:", PLAYWRIGHT_AVAILABLE)
     
     app.run(host='0.0.0.0', port=5002, debug=False)
+

@@ -17,3 +17,4 @@ Pillow==10.1.0
 
 # 유틸리티
 python-dotenv==1.0.0
+

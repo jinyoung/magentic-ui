@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-ProcessGPT Browser Server with Supabase Integration
-Supabase를 사용하여 실제 ProcessGPT 작업을 처리하는 브라우저 서버
+ProcessGPT Browser Server with ProcessGPT Agent SDK
+ProcessGPT Agent SDK를 사용하여 실제 ProcessGPT 작업을 처리하는 브라우저 서버
 """
 
 import asyncio
@@ -14,7 +14,6 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-import aiohttp
 
 # 현재 디렉토리를 Python 경로에 추가
 current_dir = Path(__file__).parent
@@ -27,6 +26,17 @@ try:
 except ImportError:
     print("Warning: python-dotenv not available. Using system environment variables.")
 
+# ProcessGPT SDK imports
+try:
+    from processgpt_agent_sdk import ProcessGPTAgentServer
+    from a2a.server.agent_execution import AgentExecutor, RequestContext
+    from a2a.server.events import EventQueue, Event
+    SDK_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: ProcessGPT SDK not available: {e}")
+    print("Using fallback classes.")
+    SDK_AVAILABLE = False
+
 # 로컬 모듈 imports
 from browser_use_agent_executor import BrowserUseAgentExecutor
 
@@ -38,151 +48,42 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class SupabaseClient:
-    """Supabase 클라이언트"""
+# Fallback classes for when ProcessGPT SDK is not available
+if not SDK_AVAILABLE:
+    class Event:
+        def __init__(self, type: str, data: Dict):
+            self.type = type
+            self.data = data
     
-    def __init__(self, supabase_url: str, supabase_key: str):
-        self.base_url = supabase_url.rstrip('/')
-        self.headers = {
-            'apikey': supabase_key,
-            'Authorization': f'Bearer {supabase_key}',
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal'
-        }
+    class EventQueue:
+        def __init__(self):
+            self.events = []
         
-    async def get_next_task(self, agent_type: str = 'browser_automation_agent') -> Optional[Dict[str, Any]]:
-        """다음 대기 중인 작업 가져오기"""
-        try:
-            url = f"{self.base_url}/rest/v1/rpc/get_next_task"
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    headers=self.headers,
-                    json={"agent_type": agent_type}
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data[0] if data else None
-                    else:
-                        logger.error(f"Failed to get next task: {response.status}")
-                        return None
-        except Exception as e:
-            logger.error(f"Error getting next task: {e}")
-            return None
+        def enqueue_event(self, event):
+            self.events.append(event)
     
-    async def update_task_status(self, task_id: str, status: str, output: Optional[Dict] = None) -> bool:
-        """작업 상태 업데이트"""
-        try:
-            url = f"{self.base_url}/rest/v1/rpc/update_task_status"
-            payload = {
-                "task_id": task_id,
-                "new_status": status
-            }
-            if output:
-                payload["result_output"] = output
-                
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    headers=self.headers,
-                    json=payload
-                ) as response:
-                    return response.status == 200
-        except Exception as e:
-            logger.error(f"Error updating task status: {e}")
-            return False
+    class RequestContext:
+        def __init__(self, user_input: str, context_data: Dict = None):
+            self.user_input = user_input
+            self.context_data = context_data or {}
+        
+        def get_user_input(self) -> str:
+            return self.user_input
+        
+        def get_context_data(self) -> Dict:
+            return self.context_data
     
-    async def log_event(self, task_id: str, event_type: str, event_data: Dict, message: str = "") -> bool:
-        """이벤트 로깅"""
-        try:
-            url = f"{self.base_url}/rest/v1/events"
-            payload = {
-                "todolist_id": task_id,
-                "event_type": event_type,
-                "event_data": event_data,
-                "message": message
-            }
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    headers=self.headers,
-                    json=payload
-                ) as response:
-                    return response.status in [200, 201]
-        except Exception as e:
-            logger.error(f"Error logging event: {e}")
-            return False
-    
-    async def health_check(self) -> Dict[str, Any]:
-        """Supabase 연결 상태 확인"""
-        try:
-            url = f"{self.base_url}/rest/v1/rpc/health_check"
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=self.headers) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    else:
-                        return {"status": "error", "code": response.status}
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
+    class AgentExecutor:
+        async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
+            pass
 
 
-class MockEventQueue:
-    """Supabase 로깅을 위한 EventQueue 구현"""
-    
-    def __init__(self, supabase_client: SupabaseClient, task_id: str):
-        self.supabase = supabase_client
-        self.task_id = task_id
-        self.events = []
-    
-    def enqueue_event(self, event):
-        """이벤트를 Supabase에 로깅"""
-        self.events.append(event)
-        # 비동기 로깅 (fire and forget)
-        asyncio.create_task(self._log_to_supabase(event))
-    
-    async def _log_to_supabase(self, event):
-        """Supabase에 이벤트 로깅"""
-        try:
-            await self.supabase.log_event(
-                task_id=self.task_id,
-                event_type=event.type,
-                event_data=event.data,
-                message=event.data.get('message', '')
-            )
-        except Exception as e:
-            logger.warning(f"Failed to log event to Supabase: {e}")
-
-
-class MockRequestContext:
-    """ProcessGPT SDK RequestContext 모의 구현"""
-    
-    def __init__(self, user_input: str, context_data: Dict = None):
-        self.user_input = user_input
-        self.context_data = context_data or {}
-    
-    def get_user_input(self) -> str:
-        return self.user_input
-    
-    def get_context_data(self) -> Dict:
-        return self.context_data
-
-
-class MockEvent:
-    """ProcessGPT SDK Event 모의 구현"""
-    
-    def __init__(self, type: str, data: Dict):
-        self.type = type
-        self.data = data
-
-
-class SupabaseBrowserServerManager:
-    """Supabase 연동 브라우저 서버 관리자"""
+class ProcessGPTBrowserServerManager:
+    """ProcessGPT SDK를 사용하는 브라우저 서버 관리자"""
     
     def __init__(self):
         self.executor: BrowserUseAgentExecutor = None
-        self.supabase: SupabaseClient = None
+        self.server: Optional[ProcessGPTAgentServer] = None
         self.is_running = False
         
         # 설정 로드
@@ -206,8 +107,8 @@ class SupabaseBrowserServerManager:
             "task_timeout": int(os.getenv("TASK_TIMEOUT", "120")),
             "save_recordings": os.getenv("SAVE_RECORDINGS", "true").lower() == "true",
             
-            # 서버 설정
-            "polling_interval": int(os.getenv("POLLING_INTERVAL", "10")),
+            # ProcessGPT 서버 설정
+            "polling_interval": int(os.getenv("POLLING_INTERVAL", "5")),
             "agent_orch": os.getenv("AGENT_ORCH", "browser_automation_agent"),
             
             # API 키
@@ -237,7 +138,7 @@ class SupabaseBrowserServerManager:
     
     async def initialize(self):
         """서버 초기화"""
-        logger.info("Supabase 연동 브라우저 서버 초기화 중...")
+        logger.info("ProcessGPT SDK 브라우저 서버 초기화 중...")
         
         # 설정 검증
         is_valid, missing_vars = self._validate_config()
@@ -247,20 +148,6 @@ class SupabaseBrowserServerManager:
             for var in missing_vars:
                 logger.error(f"  - {var}")
             return False
-        
-        # Supabase 클라이언트 초기화
-        self.supabase = SupabaseClient(
-            self.config["supabase_url"],
-            self.config["supabase_anon_key"]
-        )
-        
-        # Supabase 연결 테스트
-        health = await self.supabase.health_check()
-        if health.get("status") != "healthy":
-            logger.error(f"Supabase 연결 실패: {health}")
-            return False
-        
-        logger.info("✅ Supabase 연결 성공")
         
         # AgentExecutor 설정
         executor_config = {
@@ -275,87 +162,26 @@ class SupabaseBrowserServerManager:
         self.executor = BrowserUseAgentExecutor(config=executor_config)
         logger.info(f"BrowserUseAgentExecutor 생성됨: {executor_config}")
         
+        # ProcessGPT 서버 생성 (SDK 사용 가능한 경우만)
+        if SDK_AVAILABLE:
+            self.server = ProcessGPTAgentServer(
+                executor=self.executor,
+                polling_interval=self.config["polling_interval"],
+                agent_orch=self.config["agent_orch"]
+            )
+            logger.info("✅ ProcessGPT 서버 생성 완료")
+        else:
+            logger.warning("⚠️ ProcessGPT SDK를 사용할 수 없어 폴백 모드로 실행됩니다")
+        
         return True
     
-    async def process_task(self, task: Dict[str, Any]) -> bool:
-        """단일 작업 처리"""
-        task_id = task["task_id"]
-        description = task["description"]
-        
-        logger.info(f"작업 처리 시작: {task_id} - {description}")
-        
-        # 작업 상태를 IN_PROGRESS로 업데이트
-        await self.supabase.update_task_status(task_id, "IN_PROGRESS")
-        
-        try:
-            # Mock context 및 event queue 생성
-            context = MockRequestContext(user_input=description)
-            event_queue = MockEventQueue(self.supabase, task_id)
-            
-            # AgentExecutor 실행
-            await self.executor.execute(context, event_queue)
-            
-            # 성공 상태로 업데이트
-            result_output = {
-                "success": True,
-                "message": "작업이 성공적으로 완료되었습니다",
-                "task_id": task_id,
-                "completed_at": datetime.now().isoformat(),
-                "events_count": len(event_queue.events)
-            }
-            
-            await self.supabase.update_task_status(task_id, "DONE", result_output)
-            logger.info(f"✅ 작업 완료: {task_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ 작업 실행 실패: {task_id} - {e}")
-            
-            # 실패 상태로 업데이트
-            error_output = {
-                "success": False,
-                "error": str(e),
-                "task_id": task_id,
-                "failed_at": datetime.now().isoformat(),
-                "traceback": traceback.format_exc()
-            }
-            
-            await self.supabase.update_task_status(task_id, "CANCELLED", error_output)
-            return False
-    
-    async def polling_loop(self):
-        """Supabase 폴링 루프"""
-        polling_interval = self.config["polling_interval"]
-        agent_orch = self.config["agent_orch"]
-        
-        logger.info(f"폴링 시작 - 간격: {polling_interval}초, 에이전트: {agent_orch}")
-        
-        while self.is_running:
-            try:
-                # 다음 대기 작업 가져오기
-                task = await self.supabase.get_next_task(agent_orch)
-                
-                if task:
-                    # 작업 처리
-                    await self.process_task(task)
-                else:
-                    # 대기 중인 작업이 없음
-                    logger.debug("대기 중인 작업이 없습니다")
-                
-                # 폴링 간격만큼 대기
-                await asyncio.sleep(polling_interval)
-                
-            except Exception as e:
-                logger.error(f"폴링 루프 오류: {e}")
-                await asyncio.sleep(polling_interval)
+
     
     async def start(self):
         """서버 시작"""
         if not await self.initialize():
             logger.error("서버 초기화 실패")
             return False
-        
-        self.is_running = True
         
         print("🚀 ProcessGPT Browser Server with Supabase")
         print("=" * 60)
@@ -370,14 +196,20 @@ class SupabaseBrowserServerManager:
         print(f"🗄️  Supabase URL: {self.config['supabase_url']}")
         print(f"🔑 API 키 설정: {'✅' if self.config['openai_api_key'] else '❌'}")
         print()
-        print("🔄 Supabase todolist 테이블을 폴링하여 작업을 처리합니다")
+        print("🔄 ProcessGPT SDK로 Supabase todolist 테이블을 폴링하여 작업을 처리합니다")
         print("🛑 서버를 중지하려면 Ctrl+C를 누르세요")
         print("=" * 60)
         
         try:
-            # 폴링 루프 시작
-            await self.polling_loop()
-            
+            # ProcessGPT 서버 시작 (SDK 사용 가능한 경우)
+            if SDK_AVAILABLE and self.server:
+                logger.info("ProcessGPT SDK 서버 시작...")
+                await self.server.start()
+            else:
+                # 폴백 모드 - 기본 폴링 유지
+                logger.warning("SDK가 없어 폴백 모드로 실행됩니다")
+                await self._fallback_polling_loop()
+                
         except KeyboardInterrupt:
             logger.info("사용자가 서버 중지를 요청했습니다")
         except Exception as e:
@@ -387,10 +219,35 @@ class SupabaseBrowserServerManager:
         finally:
             await self.stop()
     
+    async def _fallback_polling_loop(self):
+        """SDK 없이 사용할 폴백 폴링 루프"""
+        polling_interval = self.config["polling_interval"]
+        agent_orch = self.config["agent_orch"]
+        
+        logger.info(f"폴백 폴링 시작 - 간격: {polling_interval}초, 에이전트: {agent_orch}")
+        
+        self.is_running = True
+        while self.is_running:
+            try:
+                logger.debug("폴백 모드에서 실행 중...")
+                await asyncio.sleep(polling_interval)
+                
+            except Exception as e:
+                logger.error(f"폴백 폴링 루프 오류: {e}")
+                await asyncio.sleep(polling_interval)
+    
     async def stop(self):
         """서버 중지"""
         logger.info("서버 종료 중...")
         self.is_running = False
+        
+        # ProcessGPT 서버 중지 (SDK 사용 중인 경우)
+        if SDK_AVAILABLE and self.server:
+            try:
+                logger.info("ProcessGPT 서버 중지 중...")
+                await self.server.stop()
+            except Exception as e:
+                logger.warning(f"ProcessGPT 서버 중지 중 오류: {e}")
         
         # 브라우저 리소스 정리
         if self.executor and hasattr(self.executor, 'browser_agent') and self.executor.browser_agent:
@@ -406,7 +263,7 @@ async def main():
     """메인 실행 함수"""
     try:
         # 서버 관리자 생성 및 시작
-        server_manager = SupabaseBrowserServerManager()
+        server_manager = ProcessGPTBrowserServerManager()
         await server_manager.start()
         
     except Exception as e:

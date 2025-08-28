@@ -54,7 +54,8 @@ RUN pip install --no-cache-dir \
     pydantic \
     python-dotenv \
     requests \
-    aiohttp
+    aiohttp \
+    process-gpt-agent-sdk
 
 # Install Playwright for Python and browsers
 RUN playwright install chromium
