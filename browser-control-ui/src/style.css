@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for VNC iframe */
+.vnc-container {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Smooth animations */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+/* Status indicators */
+.status-dot {
+  @apply inline-block w-2 h-2 rounded-full;
+}
+
+.status-success {
+  @apply bg-green-500;
+  animation: pulse 2s infinite;
+}
+
+.status-error {
+  @apply bg-red-500;
+  animation: pulse 2s infinite;
+}
+
+.status-warning {
+  @apply bg-yellow-500;
+  animation: pulse 2s infinite;
+}
+
+.status-idle {
+  @apply bg-gray-400;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

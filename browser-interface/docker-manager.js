@@ -22,6 +22,10 @@ app.use(express.static(__dirname));
 const DOCKER_IMAGE = 'magentic-ui-browser:latest';
 const DOCKER_BUILD_PATH = '../docker/magentic-ui-browser-docker';
 
+// Browser-Use Docker 설정
+const BROWSER_USE_DOCKER_IMAGE = 'magentic-ui-browser-use:latest';
+const BROWSER_USE_DOCKER_BUILD_PATH = '../docker/magentic-ui-browser-use-docker';
+
 let containerInfo = {
     name: null,
     id: null,
@@ -489,6 +493,119 @@ app.get('/api/browser-use/page-info', async (req, res) => {
         res.status(500).json({
             success: false,
             message: '페이지 정보 조회 실패',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Browser-Use Docker 이미지 빌드 API
+ */
+app.post('/api/browser-use-docker/build', async (req, res) => {
+    try {
+        console.log('Browser-Use Docker 이미지 빌드 시작...');
+        const buildCommand = `cd ${BROWSER_USE_DOCKER_BUILD_PATH} && docker build -t ${BROWSER_USE_DOCKER_IMAGE} .`;
+        const result = await executeDockerCommand(buildCommand);
+        console.log('Browser-Use Docker 이미지 빌드 완료');
+        res.json({ success: true, message: 'Browser-Use 이미지 빌드 완료', output: result.stdout });
+    } catch (error) {
+        console.error('Browser-Use Docker 이미지 빌드 실패:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Browser-Use 이미지 빌드 실패', 
+            error: error.error?.message || error.stderr 
+        });
+    }
+});
+
+/**
+ * Browser-Use Docker 컨테이너 시작 API
+ */
+app.post('/api/browser-use-docker/start', async (req, res) => {
+    try {
+        const { containerName = 'magentic-ui-browser-use', vncPort = 6080, playwrightPort = 37367, browserUsePort = 5001 } = req.body;
+        
+        // 기존 컨테이너가 있다면 제거
+        await stopContainer(containerName, false);
+        
+        const dockerCommand = [
+            'docker', 'run', '-d',
+            '--name', containerName,
+            '-p', `${vncPort}:6080`,
+            '-p', `${playwrightPort}:37367`,
+            '-p', `${browserUsePort}:5001`,
+            '-e', `NO_VNC_PORT=6080`,
+            '-e', `PLAYWRIGHT_PORT=${playwrightPort}`,
+            '-e', 'PLAYWRIGHT_WS_PATH=default',
+            '--rm',
+            BROWSER_USE_DOCKER_IMAGE
+        ].join(' ');
+
+        console.log('Browser-Use 컨테이너 시작 명령어:', dockerCommand);
+        const result = await executeDockerCommand(dockerCommand);
+        
+        const containerId = result.stdout.trim();
+        
+        const browserUseContainerInfo = {
+            name: containerName,
+            id: containerId,
+            status: 'running',
+            ports: {
+                vnc: vncPort,
+                playwright: playwrightPort,
+                browserUse: browserUsePort
+            }
+        };
+
+        console.log('Browser-Use 컨테이너 시작 완료:', browserUseContainerInfo);
+        res.json({ success: true, message: 'Browser-Use 컨테이너 시작 완료', container: browserUseContainerInfo });
+    } catch (error) {
+        console.error('Browser-Use 컨테이너 시작 실패:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Browser-Use 컨테이너 시작 실패', 
+            error: error.error?.message || error.stderr 
+        });
+    }
+});
+
+/**
+ * Browser-Use Docker API 상태 확인
+ */
+app.get('/api/browser-use-docker/health', async (req, res) => {
+    try {
+        const response = await axios.get('http://127.0.0.1:5001/health');
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Browser-Use Docker 서버에 연결할 수 없습니다',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Browser-Use Docker 태스크 실행 API
+ */
+app.post('/api/browser-use-docker/execute', async (req, res) => {
+    try {
+        const { task } = req.body;
+        
+        if (!task) {
+            return res.status(400).json({
+                success: false,
+                message: '태스크가 제공되지 않았습니다'
+            });
+        }
+        
+        const response = await axios.post('http://127.0.0.1:5001/execute', { task });
+        
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Browser-Use Docker 태스크 실행 실패',
             error: error.message
         });
     }

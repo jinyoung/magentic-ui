@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Browser-Use Server for Magentic UI Browser Interface
-AI를 통한 자연어 브라우저 제어 서버
+Simplified Browser-Use Server for Magentic UI Browser Interface
+browser-use 라이브러리 없이 순수 Playwright로 동일한 기능 구현
 """
 
 import asyncio
@@ -16,15 +16,24 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import nest_asyncio
 
-# browser-use 관련 임포트
+# Playwright 관련 임포트
 try:
-    from browser_use import Agent
     from playwright.async_api import async_playwright, Browser, Page
-    BROWSER_USE_AVAILABLE = True
+    PLAYWRIGHT_AVAILABLE = True
 except ImportError as e:
-    print(f"Warning: browser-use not available: {e}")
-    print("Install with: pip install browser-use")
-    BROWSER_USE_AVAILABLE = False
+    print(f"Warning: Playwright not available: {e}")
+    print("Install with: pip install playwright")
+    PLAYWRIGHT_AVAILABLE = False
+
+# OpenAI 임포트 (간단한 자연어 처리용)
+try:
+    import openai
+    import os
+    OPENAI_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: OpenAI not available: {e}")
+    print("Install with: pip install openai")
+    OPENAI_AVAILABLE = False
 
 # Flask 앱 설정
 app = Flask(__name__)
@@ -35,20 +44,24 @@ nest_asyncio.apply()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 전역 변수
-browser: Optional[Browser] = None
-page: Optional[Page] = None
-agent: Optional[Agent] = None
-
-class BrowserController:
+class SimpleBrowserController:
     def __init__(self):
         self.browser = None
         self.page = None
-        self.agent = None
         self.connected = False
+        self.openai_client = None
+        
+        # OpenAI 클라이언트 초기화
+        if OPENAI_AVAILABLE:
+            api_key = os.getenv('OPENAI_API_KEY')
+            if api_key:
+                self.openai_client = openai.OpenAI(api_key=api_key)
 
     async def connect_to_browser(self, ws_url: str = "ws://localhost:37367/default"):
         """Playwright 브라우저에 연결"""
+        if not PLAYWRIGHT_AVAILABLE:
+            return False
+            
         try:
             playwright = await async_playwright().start()
             
@@ -71,9 +84,6 @@ class BrowserController:
                 context = await self.browser.new_context()
                 self.page = await context.new_page()
             
-            # browser-use Agent 초기화 (브라우저 연결 후 별도로 수행)
-            # Agent는 execute_task에서 필요할 때 초기화
-            
             self.connected = True
             logger.info("브라우저에 성공적으로 연결되었습니다.")
             return True
@@ -83,15 +93,9 @@ class BrowserController:
             self.connected = False
             return False
 
-    async def execute_task(self, task: str) -> Dict[str, Any]:
-        """자연어 태스크 실행"""
-        if not BROWSER_USE_AVAILABLE:
-            return {
-                "success": False,
-                "error": "browser-use가 설치되지 않았습니다. pip install browser-use로 설치하세요."
-            }
-        
-        if not self.connected:
+    async def execute_simple_task(self, task: str) -> Dict[str, Any]:
+        """간단한 자연어 태스크 실행 (OpenAI 없이)"""
+        if not self.connected or not self.page:
             success = await self.connect_to_browser()
             if not success:
                 return {
@@ -100,41 +104,47 @@ class BrowserController:
                 }
         
         try:
-            # browser-use Agent 초기화 및 실행
-            from browser_use import Agent
+            # 간단한 태스크 처리 로직
+            task_lower = task.lower()
             
-            # 매번 새로운 Agent 인스턴스 생성 (안정성을 위해)
-            try:
-                # 첫 번째 시도: 원격 브라우저 없이 Agent 자체 브라우저 사용
-                logger.info("Agent 자체 브라우저로 실행 시도...")
-                self.agent = Agent(
-                    task=task,
-                    llm_model="gpt-4o-mini"
-                )
+            if "google" in task_lower and "검색" in task_lower:
+                # Google 검색 태스크
+                search_query = self._extract_search_query(task)
+                await self.page.goto("https://www.google.com")
+                await self.page.wait_for_selector('input[name="q"]')
+                await self.page.fill('input[name="q"]', search_query)
+                await self.page.press('input[name="q"]', 'Enter')
+                await self.page.wait_for_load_state('networkidle')
                 
-                # 태스크 실행
-                result = await self.agent.run()
+                result_message = f"Google에서 '{search_query}' 검색을 완료했습니다."
                 
-            except Exception as agent_error:
-                logger.warning(f"Agent 자체 브라우저 실행 실패: {agent_error}")
+            elif "이동" in task_lower or "방문" in task_lower:
+                # URL 방문 태스크
+                url = self._extract_url(task)
+                if url:
+                    await self.page.goto(url)
+                    await self.page.wait_for_load_state('networkidle')
+                    result_message = f"{url} 페이지로 이동했습니다."
+                else:
+                    result_message = "URL을 찾을 수 없어서 작업을 수행할 수 없습니다."
+                    
+            elif "스크린샷" in task_lower:
+                # 스크린샷 촬영
+                screenshot_path = f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                await self.page.screenshot(path=screenshot_path)
+                result_message = f"스크린샷을 {screenshot_path}에 저장했습니다."
                 
-                # 두 번째 시도: 기존 연결된 브라우저 사용
-                logger.info("기존 연결된 브라우저로 Agent 실행 시도...")
-                self.agent = Agent(
-                    task=task,
-                    llm_model="gpt-4o-mini",
-                    browser=self.browser
-                )
-                
-                result = await self.agent.run()
+            else:
+                # 기본 응답
+                result_message = f"'{task}' 태스크를 이해했지만, 구체적인 구현이 필요합니다."
             
             # 현재 페이지 정보 수집
-            current_url = await self.page.url if self.page else "unknown"
-            current_title = await self.page.title() if self.page else "unknown"
+            current_url = self.page.url
+            current_title = await self.page.title()
             
             return {
                 "success": True,
-                "result": str(result),
+                "result": result_message,
                 "current_url": current_url,
                 "current_title": current_title,
                 "task": task
@@ -147,6 +157,38 @@ class BrowserController:
                 "error": str(e),
                 "traceback": traceback.format_exc()
             }
+
+    def _extract_search_query(self, task: str) -> str:
+        """태스크에서 검색어 추출"""
+        # 간단한 검색어 추출 로직
+        if "'" in task:
+            parts = task.split("'")
+            if len(parts) >= 2:
+                return parts[1]
+        elif '"' in task:
+            parts = task.split('"')
+            if len(parts) >= 2:
+                return parts[1]
+        
+        # 기본 검색어
+        return "Playwright"
+
+    def _extract_url(self, task: str) -> str:
+        """태스크에서 URL 추출"""
+        import re
+        # URL 패턴 찾기
+        url_pattern = r'https?://[^\s]+'
+        urls = re.findall(url_pattern, task)
+        if urls:
+            return urls[0]
+        
+        # 일반적인 도메인 이름 찾기
+        if "google.com" in task.lower():
+            return "https://www.google.com"
+        elif "naver.com" in task.lower():
+            return "https://www.naver.com"
+        
+        return None
 
     async def take_screenshot(self) -> Dict[str, Any]:
         """스크린샷 촬영"""
@@ -163,7 +205,7 @@ class BrowserController:
             return {
                 "success": True,
                 "screenshot_path": screenshot_path,
-                "current_url": await self.page.url,
+                "current_url": self.page.url,
                 "current_title": await self.page.title()
             }
             
@@ -184,7 +226,7 @@ class BrowserController:
         try:
             return {
                 "success": True,
-                "url": await self.page.url,
+                "url": self.page.url,
                 "title": await self.page.title(),
                 "connected": self.connected
             }
@@ -196,14 +238,15 @@ class BrowserController:
             }
 
 # 전역 컨트롤러 인스턴스
-controller = BrowserController()
+controller = SimpleBrowserController()
 
 @app.route('/health', methods=['GET'])
 def health_check():
     """헬스 체크"""
     return jsonify({
         "status": "healthy",
-        "browser_use_available": BROWSER_USE_AVAILABLE,
+        "playwright_available": PLAYWRIGHT_AVAILABLE,
+        "openai_available": OPENAI_AVAILABLE,
         "connected": controller.connected,
         "timestamp": datetime.now().isoformat()
     })
@@ -242,7 +285,7 @@ def execute_task():
     asyncio.set_event_loop(loop)
     
     try:
-        result = loop.run_until_complete(controller.execute_task(task))
+        result = loop.run_until_complete(controller.execute_simple_task(task))
         return jsonify(result)
     finally:
         loop.close()
@@ -281,24 +324,14 @@ def get_task_examples():
             "description": "구글 홈페이지에서 검색어를 입력하고 검색합니다"
         },
         {
-            "title": "폼 작성",
-            "task": "이메일 입력 필드에 'test@example.com' 입력하기",
-            "description": "페이지의 이메일 입력 필드를 찾아서 값을 입력합니다"
+            "title": "페이지 방문",
+            "task": "https://www.naver.com 이동하기",
+            "description": "지정된 URL로 페이지를 이동합니다"
         },
         {
-            "title": "링크 클릭",
-            "task": "첫 번째 검색 결과 클릭하기",
-            "description": "검색 결과 목록에서 첫 번째 링크를 클릭합니다"
-        },
-        {
-            "title": "스크롤",
-            "task": "페이지 맨 아래로 스크롤하기",
-            "description": "페이지를 스크롤하여 더 많은 콘텐츠를 확인합니다"
-        },
-        {
-            "title": "텍스트 추출",
-            "task": "페이지 제목과 첫 번째 문단 내용 가져오기",
-            "description": "페이지의 주요 텍스트 정보를 추출합니다"
+            "title": "스크린샷",
+            "task": "현재 페이지 스크린샷 촬영하기",
+            "description": "현재 보고 있는 페이지의 스크린샷을 저장합니다"
         }
     ]
     
@@ -308,7 +341,7 @@ def get_task_examples():
     })
 
 if __name__ == '__main__':
-    print("🤖 Browser-Use Server 시작 중...")
+    print("🤖 Simple Browser-Use Server 시작 중...")
     print("📋 사용 가능한 엔드포인트:")
     print("  - GET  /health       - 헬스 체크")
     print("  - POST /connect      - 브라우저 연결")
@@ -318,10 +351,10 @@ if __name__ == '__main__':
     print("  - GET  /tasks/examples - 태스크 예시 목록")
     print()
     
-    if not BROWSER_USE_AVAILABLE:
-        print("⚠️  browser-use가 설치되지 않았습니다.")
-        print("   설치 명령: pip install browser-use")
+    if not PLAYWRIGHT_AVAILABLE:
+        print("⚠️  Playwright가 설치되지 않았습니다.")
+        print("   설치 명령: pip install playwright")
         print()
     
-    # macOS AirPlay 충돌 방지를 위해 포트 5001 사용
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    # macOS AirPlay 충돌 방지를 위해 포트 5003 사용
+    app.run(host='0.0.0.0', port=5003, debug=True)

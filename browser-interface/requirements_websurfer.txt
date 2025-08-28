@@ -1,0 +1,19 @@
+# Magentic UI WebSurfer Server Requirements
+# 웹 서버
+flask==3.0.0
+flask-cors==4.0.0
+
+# 비동기 지원
+nest-asyncio==1.5.8
+
+# 브라우저 자동화
+playwright==1.40.0
+
+# AI/LLM
+openai==1.5.0
+
+# 이미지 처리
+Pillow==10.1.0
+
+# 유틸리티
+python-dotenv==1.0.0
