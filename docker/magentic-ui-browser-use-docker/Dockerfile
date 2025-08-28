@@ -50,7 +50,11 @@ RUN pip install --no-cache-dir \
     flask-cors \
     nest-asyncio \
     playwright \
-    openai
+    openai \
+    pydantic \
+    python-dotenv \
+    requests \
+    aiohttp
 
 # Install Playwright for Python and browsers
 RUN playwright install chromium
@@ -58,14 +62,23 @@ RUN playwright install chromium
 # Set up supervisord configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Copy scripts
+# Copy scripts and ProcessGPT server files
 COPY start.sh /app/start.sh
 COPY playwright-server.js /app/playwright-server.js
 COPY x11-setup.sh /app/x11-setup.sh
 COPY browser-use-server.py /app/browser-use-server.py
+COPY processgpt_browser_server.py /app/processgpt_browser_server.py
+COPY processgpt_browser_server_standalone.py /app/processgpt_browser_server_standalone.py
+COPY processgpt_browser_server_supabase.py /app/processgpt_browser_server_supabase.py
+COPY browser_use_agent_executor.py /app/browser_use_agent_executor.py
+COPY test_processgpt_integration.py /app/test_processgpt_integration.py
+COPY integrated_browser_server.py /app/integrated_browser_server.py
+COPY run_integrated_server.py /app/run_integrated_server.py
+COPY test_integrated_server.py /app/test_integrated_server.py
+COPY browser_use_agent.py /app/browser_use_agent.py
 
 # Make scripts executable
-RUN chmod +x /app/start.sh /app/x11-setup.sh
+RUN chmod +x /app/start.sh /app/x11-setup.sh /app/run_integrated_server.py /app/processgpt_browser_server.py
 
 # Create a simple openbox configuration to only show the browser window
 RUN mkdir -p /root/.config/openbox

@@ -1,0 +1,192 @@
+version: '3.8'
+
+services:
+  # Supabase 데이터베이스 (PostgreSQL)
+  postgres:
+    image: postgres:15-alpine
+    container_name: processgpt-postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_PORT: 5432
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - processgpt-network
+
+  # Supabase API (PostgREST)
+  postgrest:
+    image: postgrest/postgrest:v12.0.1
+    container_name: processgpt-postgrest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://postgres:postgres@postgres:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: super-secret-jwt-token-with-at-least-32-characters-long
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    ports:
+      - "3000:3000"
+    networks:
+      - processgpt-network
+
+  # Supabase Auth (GoTrue)
+  gotrue:
+    image: supabase/gotrue:v2.132.3
+    container_name: processgpt-gotrue
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres?search_path=auth
+      GOTRUE_SITE_URL: http://localhost:3000
+      GOTRUE_URI_ALLOW_LIST: "*"
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_SECRET: super-secret-jwt-token-with-at-least-32-characters-long
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_SMTP_ADMIN_EMAIL: admin@localhost.com
+      GOTRUE_SMTP_HOST: localhost
+      GOTRUE_SMTP_PORT: 587
+      GOTRUE_SMTP_USER: ""
+      GOTRUE_SMTP_PASS: ""
+      GOTRUE_SMTP_SENDER_NAME: ""
+      GOTRUE_MAILER_URLPATHS_INVITE: "/auth/v1/verify"
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: "/auth/v1/verify"
+      GOTRUE_MAILER_URLPATHS_RECOVERY: "/auth/v1/verify"
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: "/auth/v1/verify"
+    ports:
+      - "9999:9999"
+    networks:
+      - processgpt-network
+
+  # Supabase Studio (관리 UI)
+  studio:
+    image: supabase/studio:20240326-5e5586d
+    container_name: processgpt-studio
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: postgres
+      DEFAULT_ORGANIZATION_NAME: "ProcessGPT Organization"
+      DEFAULT_PROJECT_NAME: "ProcessGPT Project"
+      SUPABASE_URL: http://localhost:54321
+      SUPABASE_PUBLIC_URL: http://localhost:54321
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      SUPABASE_SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+    ports:
+      - "3001:3000"
+    networks:
+      - processgpt-network
+
+  # Supabase Meta API
+  meta:
+    image: supabase/postgres-meta:v0.68.0
+    container_name: processgpt-meta
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: postgres
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: postgres
+      PG_META_DB_PASSWORD: postgres
+    ports:
+      - "8080:8080"
+    networks:
+      - processgpt-network
+
+  # Kong API Gateway (Supabase API 통합)
+  kong:
+    image: kong/kong-gateway:3.2.2.5
+    container_name: processgpt-kong
+    depends_on:
+      - postgres
+      - postgrest
+      - gotrue
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+    ports:
+      - "54321:8000"  # Supabase API 엔드포인트
+      - "54322:8443"  # HTTPS
+    volumes:
+      - ./supabase/kong.yml:/var/lib/kong/kong.yml:ro
+    networks:
+      - processgpt-network
+
+  # ProcessGPT Browser Server
+  processgpt-browser:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: processgpt-browser-server
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kong:
+        condition: service_started
+    environment:
+      # ProcessGPT 설정
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      SUPABASE_SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+      
+      # OpenAI API (외부에서 제공)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Browser-Use 설정
+      LLM_MODEL: gpt-4o-mini
+      BROWSER_HEADLESS: "true"
+      MAX_ACTIONS: 30
+      TASK_TIMEOUT: 120
+      POLLING_INTERVAL: 10
+      AGENT_ORCH: browser_automation_agent
+      SAVE_RECORDINGS: "true"
+      
+      # 시스템 설정
+      DISPLAY: ":99"
+    ports:
+      - "6080:6080"   # noVNC
+      - "5001:5001"   # Browser-Use API
+      - "37367:37367" # Playwright
+    volumes:
+      - ./recordings:/app/recordings
+      - ./logs:/app/logs
+    shm_size: 2gb
+    networks:
+      - processgpt-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  processgpt-network:
+    driver: bridge

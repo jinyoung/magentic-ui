@@ -1,3 +1,7 @@
+
+
+
+
 <div align="center">
 <img src="docs/img/magui-readme-logo.svg" alt="Magentic-UI Logo">
 
